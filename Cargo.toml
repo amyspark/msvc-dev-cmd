@@ -1,0 +1,28 @@
+[package]
+name = "msvc-dev-cmd"
+description = "Run a command under your favourite Developer Shell Prompt"
+version = "0.1.0"
+authors = ["amyspark <amy@amyspark.me>"]
+edition = "2018"
+license = "MPL-2.0"
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4.1", features = ["derive"] }
+ctrlc = "3.2"
+env_logger = "0.9"
+log = "0.4"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["winuser"] }
+
+[target.'cfg(unix)'.dependencies]
+nix = "0.18"
+
+[target.'cfg(all(unix, target_os = "macos"))'.dependencies]
+core-foundation = "0.9"
+
+[profile.release]
+codegen-units = 1
+opt-level = 'z'
+lto = true
