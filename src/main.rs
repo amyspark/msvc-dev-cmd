@@ -3,6 +3,7 @@
 use anyhow::{Result, bail, Context};
 use std::collections::{HashMap, HashSet};
 use std::{env, process};
+use std::io::Write;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -10,6 +11,7 @@ use std::sync::{Mutex, Arc};
 use clap::Parser;
 use log;
 use env_logger;
+use tempfile::Builder;
 
 #[derive(Parser, Debug)]
 #[command(version, author, about = "Run a command under your favourite Developer Shell Prompt", after_help = "Inspired by https://github.com/ilammy/msvc-dev-cmd")]
@@ -119,7 +121,7 @@ impl Constants {
             match path {
                 Ok(v) => {
                     log::info!("Found with vswhere: {}", v);
-                    return Ok(v);
+                    return Ok(format!(r#""{}""#, v));
                 },
                 Err(_) => {
                     log::info!("Not found with vswhere")
@@ -142,7 +144,7 @@ impl Constants {
                     let path = Path::new(&f);
                     if path.exists() {
                         log::info!("Found standard location: {}", f);
-                        return Ok(f)
+                        return Ok(format!(r#""{}""#, f))
                     }
                 }
             }
@@ -155,7 +157,7 @@ impl Constants {
 
         if path.exists() {
             log::info!("Found VS 2015: {}", f);
-            return Ok(f)
+            return Ok(format!(r#""{}""#, f))
         }
         
         log::info!("Not found in VS 2015 location: {}", f);
@@ -236,10 +238,44 @@ fn setup_msvcdev_cmd(opt: &Opt) -> Result<()> {
     };
     log::debug!("vcvars command-line: {}", vcvars);
 
-    let output = Command::new("cmd").arg("/K").arg(format!("set && cls && {} %% cls && set", vcvars)).output()?.stdout;
-    let cmd_output_string = String::from_utf8(output)?; 
+    // Unlike the original, which can just shell out and call cmd,
+    // here Rust mucks with the escaping of quotes. *flops*
+    // See https://internals.rust-lang.org/t/std-process-on-windows-is-escaping-raw-literals-which-causes-problems-with-chaining-commands/8163
+
+    let tmp_batch = {
+        let mut batch = Builder::new().suffix(".bat").tempfile()?;
+        let arg = format!("set && cls && {} && cls && set", vcvars);
+        log::debug!("cmd command: {:?}", arg);
+        writeln!(batch, "{}", arg)?;
+        batch.flush()?;
+
+        batch
+    };
+
+    let mut command = {
+        let mut cmd = Command::new("cmd");
+        cmd.arg("/C").arg(tmp_batch.path());
+
+        cmd
+    };
+    log::debug!("cmd command: {:?}", command);
+
+    let result = command.output()?;
+    let cmd_output_string = result.stdout; 
+    log::debug!("vcvars output: \n{}", String::from_utf8_lossy(&cmd_output_string));
+
+    let cmd_error_string = String::from_utf8_lossy(&result.stderr); 
+    log::debug!("vcvars error: \n{}", cmd_error_string);
+
     // form feed
-    let cmd_output_parts = cmd_output_string.split('\x0C').into_iter().collect::<Vec<_>>();
+    let cmd_output_parts = cmd_output_string.split(|num| num == &0xC).into_iter().map(|x| String::from_utf8_lossy(x)).collect::<Vec<_>>();
+    
+    if cmd_output_parts.len() != 3 {
+        bail!("Couldn't split the output into pages!");
+    }
+
+    // AFTER this step, you can transform it into strings
+    // (otherwise UTF-8 will munge the form feed char)
 
     let old_environment = cmd_output_parts[0].split('\n');
     let vcvars_output   = cmd_output_parts[1].split('\n');
@@ -265,6 +301,11 @@ fn setup_msvcdev_cmd(opt: &Opt) -> Result<()> {
     let old_env_vars = {
         let mut vars: HashMap<&str, &str> = HashMap::new();
         for i in old_environment {
+            // Rust version will take in the shell command line.
+            // Skip lines that don't look like environment variables.
+            if !i.contains('=') {
+                continue;
+            }
             let x = i.split('=').collect::<Vec<_>>();
             vars.insert(x[0], x[1]);
         }
