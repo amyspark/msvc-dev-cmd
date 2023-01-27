@@ -326,8 +326,7 @@ fn setup_msvcdev_cmd(opt: &Opt) -> Result<()> {
             Some((name, new_value)) => {
                 let old_value = old_env_vars.get(name);
                 // For new variables "old_value === undefined".
-                if old_value.is_none() || matches!(old_value, Some(v) if v.eq_ignore_ascii_case(new_value)) {
-                    log::info!("Setting {}", name);
+                if old_value.is_none() || !matches!(old_value, Some(v) if v.eq_ignore_ascii_case(new_value)) {
                     // Special case for a bunch of PATH-like variables: vcvarsall.bat
                     // just prepends its stuff without checking if its already there.
                     // This makes repeated invocations of this action fail after some
