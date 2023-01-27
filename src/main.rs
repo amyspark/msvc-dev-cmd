@@ -139,7 +139,7 @@ impl Constants {
         for prog_files in self.program_files.iter() {
             for ver in years.iter() {
                 for ed in EDITIONS {
-                    let f = format!("({}\\Microsoft Visual Studio\\{}\\{}\\VC\\Auxiliary\\Build\\vcvarsall.bat", prog_files, ver, ed);
+                    let f = format!("{}\\Microsoft Visual Studio\\{}\\{}\\VC\\Auxiliary\\Build\\vcvarsall.bat", prog_files, ver, ed);
                     log::info!("Trying standard location: {}", f);
                     let path = Path::new(&f);
                     if path.exists() {
