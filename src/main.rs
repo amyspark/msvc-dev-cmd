@@ -47,7 +47,7 @@ struct Opt {
     args: Vec<PathBuf>,
 }
 
-const EDITIONS: [&str; 3]  = ["Enterprise", "Professional", "Community"];
+const EDITIONS: [&str; 4]  = ["Enterprise", "Professional", "Community", "Preview"];
 
 const YEARS: [&str; 4] = ["2022", "2019", "2017", "2015"];
 
