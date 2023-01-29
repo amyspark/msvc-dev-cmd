@@ -54,42 +54,42 @@ const YEARS: [&str; 4] = ["2022", "2019", "2017", "2015"];
 const PATH_LIKE_VARIABLES: [&str; 4] = ["PATH", "INCLUDE", "LIB", "LIBPATH"];
 
 #[derive(Debug)]
-struct Constants
+struct Constants<'a>
 {
     program_files_x86: String,
     program_files: Vec<String>,
-    vs_year_version: HashMap<String, String>,
+    vs_year_version: HashMap<&'a str, &'a str>,
     vswhere_path: String,
 }
 
-impl Constants {
-    pub fn new() -> Result<Constants> {
+impl Constants<'_> {
+    pub fn new() -> Result<Constants<'static>> {
         let program_files_x86 = env::var("ProgramFiles(x86)")?;
         let program_files = env::var("ProgramFiles")?;
         Ok(Constants {
             program_files_x86: program_files_x86.clone(),
             program_files: vec![program_files_x86.clone(), program_files],
             vs_year_version: HashMap::from([
-                ("2022".to_string(), "17.0".to_string()),
-                ("2019".to_string(), "16.0".to_string()),
-                ("2017".to_string(), "15.0".to_string()),
-                ("2015".to_string(), "14.0".to_string()),
-                ("2013".to_string(), "12.0".to_string()),
+                ("2022", "17.0"),
+                ("2019", "16.0"),
+                ("2017", "15.0"),
+                ("2015", "14.0"),
+                ("2013", "12.0"),
             ]),
             vswhere_path: format!("{}\\Microsoft Visual Studio\\Installer", program_files_x86)
         })
     }
 
-    fn vsversion_to_versionnumber(&self, vsversion: &Option<String>) -> Option<&String> {
+    fn vsversion_to_versionnumber(&self, vsversion: &Option<String>) -> Option<&str> {
         match vsversion  {
-            Some(v) => self.vs_year_version.get(v),
+            Some(v) => self.vs_year_version.get(v.as_str()).copied(),
             None => None
         }
     }
 
     fn vsversion_to_year(&self, vsversion: &str) -> String {
         for (year, version) in self.vs_year_version.iter() {
-            if vsversion.eq(version) {
+            if vsversion.eq(version.deref()) {
                 return year.to_string()
             }
         }
