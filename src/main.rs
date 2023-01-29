@@ -2,6 +2,7 @@
 
 use anyhow::{Result, bail, Context};
 use std::collections::{HashMap, HashSet};
+use std::ffi::OsString;
 use std::{env, process};
 use std::io::Write;
 use std::ops::Deref;
@@ -53,19 +54,26 @@ const YEARS: [&str; 4] = ["2022", "2019", "2017", "2015"];
 
 const PATH_LIKE_VARIABLES: [&str; 4] = ["PATH", "INCLUDE", "LIB", "LIBPATH"];
 
+fn pathbuf_from_key(key: &str) -> Result<PathBuf> {
+    match env::var_os(key) {
+        Some(v) => Ok(PathBuf::from(v)),
+        None => bail!("The environment variable {} isn't set or is invalid", key),
+    }
+}
+
 #[derive(Debug)]
 struct Constants<'a>
 {
-    program_files_x86: String,
-    program_files: Vec<String>,
+    program_files_x86: PathBuf,
+    program_files: Vec<PathBuf>,
     vs_year_version: HashMap<&'a str, &'a str>,
-    vswhere_path: String,
+    vswhere_path: PathBuf,
 }
 
 impl Constants<'_> {
     pub fn new() -> Result<Constants<'static>> {
-        let program_files_x86 = env::var("ProgramFiles(x86)")?;
-        let program_files = env::var("ProgramFiles")?;
+        let program_files_x86 = pathbuf_from_key("ProgramFiles(x86)")?;
+        let program_files = pathbuf_from_key("ProgramFiles")?;
         Ok(Constants {
             program_files_x86: program_files_x86.clone(),
             program_files: vec![program_files_x86.clone(), program_files],
@@ -76,7 +84,7 @@ impl Constants<'_> {
                 ("2015", "14.0"),
                 ("2013", "12.0"),
             ]),
-            vswhere_path: format!("{}\\Microsoft Visual Studio\\Installer", program_files_x86)
+            vswhere_path: program_files_x86.join("Microsoft Visual Studio/Installer")
         })
     }
 
@@ -97,15 +105,15 @@ impl Constants<'_> {
         String::from(vsversion)
     }
 
-    fn find_with_vswhere(&self, pattern: &str, version_pattern: &str) -> Result<String> {
+    fn find_with_vswhere(&self, pattern: &str, version_pattern: &str) -> Result<PathBuf> {
         let installation_path = Command::new("vswhere").arg(format!("-products {}", version_pattern)).arg("-prerelease").arg("-property installationPath").output()?;
 
         let path = String::from_utf8(installation_path.stdout)?;
 
-        Ok(format!("{}\\{}", path, pattern))
+        Ok(PathBuf::from(path).join(pattern))
     }
 
-    fn find_vcvarsall(&self, vsversion: &Option<String>) -> Result<String> {
+    fn find_vcvarsall(&self, vsversion: &Option<String>) -> Result<PathBuf> {
         let vsversion_number = self.vsversion_to_versionnumber(vsversion);
         let version_pattern = match vsversion_number {
             Some(v) => {
@@ -117,11 +125,11 @@ impl Constants<'_> {
     
         // If vswhere is available, ask it about the location of the latest Visual Studio.
         {
-            let path = self.find_with_vswhere("VC\\Auxiliary\\Build\\vcvarsall.bat", &version_pattern);
+            let path = self.find_with_vswhere("VC/Auxiliary/Build/vcvarsall.bat", &version_pattern);
             match path {
                 Ok(v) => {
-                    log::info!("Found with vswhere: {}", v);
-                    return Ok(format!(r#""{}""#, v));
+                    log::info!("Found with vswhere: {}", v.display());
+                    return Ok(v);
                 },
                 Err(_) => {
                     log::info!("Not found with vswhere")
@@ -139,12 +147,12 @@ impl Constants<'_> {
         for prog_files in self.program_files.iter() {
             for ver in years.iter() {
                 for ed in EDITIONS {
-                    let f = format!("{}\\Microsoft Visual Studio\\{}\\{}\\VC\\Auxiliary\\Build\\vcvarsall.bat", prog_files, ver, ed);
-                    log::info!("Trying standard location: {}", f);
+                    let f = prog_files.join("Microsoft Visual Studio").join(ver).join(ed).join("VC/Auxiliary/Build/vcvarsall.bat");
+                    log::info!("Trying standard location: {}", f.display());
                     let path = Path::new(&f);
                     if path.exists() {
-                        log::info!("Found standard location: {}", f);
-                        return Ok(format!(r#""{}""#, f))
+                        log::info!("Found standard location: {}", f.display());
+                        return Ok(f)
                     }
                 }
             }
@@ -152,15 +160,15 @@ impl Constants<'_> {
         log::info!("Not found in standard locations");
     
         // Special case for Visual Studio 2015 (and maybe earlier), try it out too.
-        let f = format!("{}\\Microsoft Visual C++ Build Tools\\vcbuildtools.bat", self.program_files_x86);
+        let f = self.program_files_x86.join("Microsoft Visual C++ Build Tools/vcbuildtools.bat");
         let path = Path::new(&f);
 
         if path.exists() {
-            log::info!("Found VS 2015: {}", f);
-            return Ok(format!(r#""{}""#, f))
+            log::info!("Found VS 2015: {}", f.display());
+            return Ok(f)
         }
         
-        log::info!("Not found in VS 2015 location: {}", f);
+        log::info!("Not found in VS 2015 location: {}", f.display());
 
         bail!("Microsoft Visual Studio not found")
     }
@@ -187,9 +195,13 @@ fn setup_msvcdev_cmd(opt: &Opt) -> Result<()> {
     }
 
     // Add standard location of "vswhere" to PATH, in case it's not there.
+    let path = match std::env::var_os("PATH") {
+        Some(v) => v,
+        None => OsString::new()
+    };
     let paths = vec![
-        std::env::var("PATH")?,
-        constants.vswhere_path.clone()
+        path,
+        constants.vswhere_path.as_os_str().to_owned()
     ];
     std::env::join_paths(paths.iter())?;
 
@@ -232,7 +244,13 @@ fn setup_msvcdev_cmd(opt: &Opt) -> Result<()> {
             args.push("-vcvars_spectre_libs=spectre".to_string());
         }
 
-        let mut v = vec![constants.find_vcvarsall(&opt.vsversion)?];
+        // enquote the parameter here
+        let vcvarsall = constants.find_vcvarsall(&opt.vsversion)?;
+        let vcvarsall_path = match vcvarsall.to_str() {
+            Some(v) => v,
+            None => bail!("The path to vswhere contains invalid characters: {}", vcvarsall.to_string_lossy())
+        };
+        let mut v = vec![format!(r#""{}""#, vcvarsall_path)];
         v.extend(args);
         v.join(" ")
     };
