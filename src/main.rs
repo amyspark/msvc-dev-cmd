@@ -285,13 +285,8 @@ fn setup_msvcdev_cmd(opt: &Opt) -> Result<()> {
     // an error and *still* exit successfully. Parse out errors from output
     // which don't look like environment variables, and fail if appropriate.
     let error_messages = vcvars_output.filter(| i | {
-        if i.contains("[ERROR") {
-            // Don't print this particular line which will be confusing in output.
-            if !i.contains("Error in script usage. the correct usage is:") {
-                return true
-            }
-        }
-        return false
+        // Don't print this particular line which will be confusing in output.
+        i.contains("[ERROR") && !i.contains("Error in script usage. the correct usage is:")
     }).collect::<Vec<_>>();
     if !error_messages.is_empty() {
         bail!("Invalid parameters\n{}", error_messages.join("\n"));
