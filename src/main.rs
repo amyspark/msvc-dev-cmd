@@ -306,8 +306,14 @@ fn setup_msvcdev_cmd(opt: &Opt) -> Result<()> {
             if !i.contains('=') {
                 continue;
             }
-            let x = i.split('=').collect::<Vec<_>>();
-            vars.insert(x[0], x[1]);
+            match i.split_once('=') {
+                Some((name, old_value)) => {
+                    vars.insert(name, old_value);
+                },
+                None => {
+                    bail!("Invalid key=value in cmd output: {}", i);
+                }
+            }
         }
         vars
     };
@@ -339,7 +345,9 @@ fn setup_msvcdev_cmd(opt: &Opt) -> Result<()> {
                     }
                 }
             },
-            None => {}
+            None => {
+                bail!("Invalid key=value in cmd output: {}", i);
+            }
         }
     }
 
