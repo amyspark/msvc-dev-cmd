@@ -198,11 +198,16 @@ fn setup_msvcdev_cmd(opt: &Opt) -> Result<()> {
         Some(v) => v,
         None => OsString::new()
     };
-    let paths = vec![
-        path,
-        constants.vswhere_path.as_os_str().to_owned()
-    ];
-    std::env::join_paths(paths.iter())?;
+
+    let extended_path = {
+        let mut paths = env::split_paths(&path).into_iter().collect::<Vec<_>>();
+    
+        paths.push(constants.vswhere_path.clone());
+
+        env::join_paths(paths.iter())?
+    };
+
+    env::set_var("PATH", extended_path);
 
     // There are all sorts of way the architectures are called. In addition to
     // values supported by Microsoft Visual C++, recognize some common aliases.
