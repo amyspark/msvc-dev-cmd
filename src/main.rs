@@ -288,7 +288,7 @@ fn setup_msvcdev_cmd(opt: &Opt) -> Result<()> {
     let cmd_output_parts = cmd_output_string.split(|num| num == &0xC).into_iter().map(|x| String::from_utf8_lossy(x)).collect::<Vec<_>>();
     
     if cmd_output_parts.len() != 3 {
-        bail!("Couldn't split the output into pages!");
+        bail!("Couldn't split the output into pages: {}", cmd_error_string);
     }
 
     // AFTER this step, you can transform it into strings
