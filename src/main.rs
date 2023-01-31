@@ -183,8 +183,7 @@ fn is_path_variable(name: &str) -> bool {
 /// Remove duplicates by keeping the first occurance and preserving order.
 /// This keeps path shadowing working as intended.
 fn filter_path_value(path: &str) -> String {
-    let paths = path.split(";").into_iter().collect::<HashSet<_>>();
-    paths.into_iter().collect::<Vec<_>>().join(";")
+    return path.split(";").into_iter().collect::<HashSet<_>>().into_iter().collect::<Vec<_>>().join(";")
 }
 
 fn setup_msvcdev_cmd(opt: &Opt) -> Result<()> {
