@@ -106,7 +106,7 @@ impl Constants<'_> {
     }
 
     fn find_with_vswhere(&self, pattern: &str, version_pattern: &str) -> Result<PathBuf> {
-        let installation_path = Command::new("vswhere").arg(format!("-products {}", version_pattern)).arg("-prerelease").arg("-property installationPath").output()?;
+        let installation_path = Command::new("vswhere").args(["-products", "*"]).arg(version_pattern).arg("-prerelease").args(["-property", "installationPath"]).arg("-utf8").output()?;
 
         let path = String::from_utf8(installation_path.stdout)?;
 
