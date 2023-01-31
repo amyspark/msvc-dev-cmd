@@ -2,6 +2,7 @@
 
 use anyhow::{Result, bail, Context};
 use std::collections::{HashMap, HashSet};
+use dunce::canonicalize;
 use std::ffi::OsString;
 use std::{env, process};
 use std::io::Write;
@@ -106,11 +107,31 @@ impl Constants<'_> {
     }
 
     fn find_with_vswhere(&self, pattern: &str, version_pattern: &str) -> Result<PathBuf> {
-        let installation_path = Command::new("vswhere").args(["-products", "*"]).arg(version_pattern).arg("-prerelease").args(["-property", "installationPath"]).arg("-utf8").output()?;
+        let mut installation_path = {
+            let mut cmd = Command::new("vswhere");
 
-        let path = String::from_utf8(installation_path.stdout)?;
+            cmd.args(["-products", "*"]).arg(version_pattern).arg("-prerelease").args(["-property", "installationPath"]).arg("-utf8");
 
-        Ok(PathBuf::from(path).join(pattern))
+            cmd
+        };
+
+        log::debug!("vswhere command: {:?} {:?}", installation_path.get_program(), installation_path.get_args());
+
+        let output = installation_path.output()?;
+
+        let path = String::from_utf8(output.stdout)?;
+
+        log::debug!("vswhere output for query {}: {}", version_pattern, path.trim());
+
+        if path.contains("Visual Studio Locator") || path.contains("Copyright (C)") {
+            bail!("Query to vswhere failed:\n\t{}", path.trim());
+        }
+
+        let res = canonicalize( PathBuf::from(path.trim()).join(pattern))?;
+
+        log::debug!("Result of vswhere query {}: {}", pattern, res.display());
+
+        Ok(res)
     }
 
     fn find_vcvarsall(&self, vsversion: &Option<String>) -> Result<PathBuf> {
@@ -131,8 +152,8 @@ impl Constants<'_> {
                     log::info!("Found with vswhere: {}", v.display());
                     return Ok(v);
                 },
-                Err(_) => {
-                    log::info!("Not found with vswhere")
+                Err(v) => {
+                    log::info!("Not found with vswhere: {}", v)
                 }
             }
         }

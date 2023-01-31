@@ -116,6 +116,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "dunce"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0bd4b30a6560bbd9b4620f4de34c3f14f60848e58a9b7216801afcb4c7b31c3c"
+
+[[package]]
 name = "env_logger"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -254,6 +260,7 @@ dependencies = [
  "clap",
  "core-foundation",
  "ctrlc",
+ "dunce",
  "env_logger",
  "log",
  "nix 0.18.0",
