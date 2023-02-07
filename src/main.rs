@@ -107,19 +107,52 @@ impl Constants<'_> {
     }
 
     fn find_with_vswhere(&self, pattern: &str, version_pattern: &str) -> Result<PathBuf> {
-        let mut installation_path = {
-            let mut cmd = Command::new("vswhere");
+        let vswhere: String = {
+            let mut args = vec!["vswhere"];
+            args.push("-products");
+            args.push("*");
+            args.push(version_pattern);
+            args.push("-prerelease");
+            args.push("-property");
+            args.push("installationPath");
+            args.push("-sort");
+            args.push("-utf8");
 
-            cmd.args(["-products", "*"]).arg(version_pattern).arg("-prerelease").args(["-property", "installationPath"]).arg("-utf8");
+            args.join(" ")
+        };
+        log::debug!("vswhere command-line: {}", vswhere);
+
+        let tmp_batch = {
+            let mut batch = Builder::new().suffix(".bat").tempfile()?;
+            log::debug!("cmd command: {:?}", vswhere);
+            writeln!(batch, "{}", vswhere)?;
+            batch.flush()?;
+
+            batch
+        };
+
+        let mut command = {
+            let mut cmd = Command::new("cmd");
+            cmd.arg("/C").arg(tmp_batch.path());
 
             cmd
         };
 
-        log::debug!("vswhere command: {:?} {:?}", installation_path.get_program(), installation_path.get_args());
+        log::debug!("cmd command: {:?}", command);
 
-        let output = installation_path.output()?;
+        let result = command.output()?;
+        let cmd_output_string = String::from_utf8(result.stdout)?;
+        log::debug!("vswhere output: \n{}", cmd_output_string);
 
-        let path = String::from_utf8(output.stdout)?;
+        let cmd_error_string = String::from_utf8_lossy(&result.stderr);
+        log::debug!("vswhere error: \n{}", cmd_error_string);
+
+        // Extract the first path -- skip the prompt
+        let paths = cmd_output_string.trim().split('\n').skip(1).collect::<Vec<_>>();
+        let path = match paths.first() {
+            Some(v) => v,
+            None => bail!("Couldn't determine the latest VS installation path")
+        };
 
         log::debug!("vswhere output for query {}: {}", version_pattern, path.trim());
 
