@@ -228,6 +228,8 @@ fn setup_msvcdev_cmd(opt: &Opt) -> Result<()> {
         env::join_paths(paths.iter())?
     };
 
+    log::debug!("Setting PATH to: {:?}", extended_path);
+
     env::set_var("PATH", extended_path);
 
     // There are all sorts of way the architectures are called. In addition to
