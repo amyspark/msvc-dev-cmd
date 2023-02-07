@@ -143,7 +143,7 @@ impl Constants<'_> {
             },
             None => "-latest".to_string()
         };
-    
+
         // If vswhere is available, ask it about the location of the latest Visual Studio.
         {
             let path = self.find_with_vswhere("VC/Auxiliary/Build/vcvarsall.bat", &version_pattern);
@@ -157,7 +157,7 @@ impl Constants<'_> {
                 }
             }
         }
-    
+
         // If that does not work, try the standard installation locations,
         // starting with the latest and moving to the oldest.
         let years = match vsversion {
@@ -179,7 +179,7 @@ impl Constants<'_> {
             }
         }
         log::info!("Not found in standard locations");
-    
+
         // Special case for Visual Studio 2015 (and maybe earlier), try it out too.
         let f = self.program_files_x86.join("Microsoft Visual C++ Build Tools/vcbuildtools.bat");
         let path = Path::new(&f);
@@ -188,7 +188,7 @@ impl Constants<'_> {
             log::info!("Found VS 2015: {}", f.display());
             return Ok(f)
         }
-        
+
         log::info!("Not found in VS 2015 location: {}", f.display());
 
         bail!("Microsoft Visual Studio not found")
@@ -222,7 +222,7 @@ fn setup_msvcdev_cmd(opt: &Opt) -> Result<()> {
 
     let extended_path = {
         let mut paths = env::split_paths(&path).into_iter().collect::<Vec<_>>();
-    
+
         paths.push(constants.vswhere_path.clone());
 
         env::join_paths(paths.iter())?
@@ -241,7 +241,7 @@ fn setup_msvcdev_cmd(opt: &Opt) -> Result<()> {
         ("x86-64", "x64"),
     ]);
     // Ignore case when matching as that's what humans expect.
-    
+
     let arch: String = {
         let arch_lowercase = opt.arch.to_lowercase();
 
@@ -306,15 +306,15 @@ fn setup_msvcdev_cmd(opt: &Opt) -> Result<()> {
     log::debug!("cmd command: {:?}", command);
 
     let result = command.output()?;
-    let cmd_output_string = result.stdout; 
+    let cmd_output_string = result.stdout;
     log::debug!("vcvars output: \n{}", String::from_utf8_lossy(&cmd_output_string));
 
-    let cmd_error_string = String::from_utf8_lossy(&result.stderr); 
+    let cmd_error_string = String::from_utf8_lossy(&result.stderr);
     log::debug!("vcvars error: \n{}", cmd_error_string);
 
     // form feed
     let cmd_output_parts = cmd_output_string.split(|num| num == &0xC).into_iter().map(|x| String::from_utf8_lossy(x)).collect::<Vec<_>>();
-    
+
     if cmd_output_parts.len() != 3 {
         bail!("Couldn't split the output into pages: {}", cmd_error_string);
     }
