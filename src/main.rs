@@ -85,7 +85,7 @@ impl Constants<'_> {
                 ("2015", "14.0"),
                 ("2013", "12.0"),
             ]),
-            vswhere_path: program_files_x86.join("Microsoft Visual Studio/Installer")
+            vswhere_path: dunce::canonicalize(program_files_x86.join("Microsoft Visual Studio/Installer"))?
         })
     }
 
