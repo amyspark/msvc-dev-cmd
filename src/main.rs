@@ -139,7 +139,7 @@ impl Constants<'_> {
         let version_pattern = match vsversion_number {
             Some(v) => {
                 let upper_bound = v.split(".").collect::<Vec<_>>()[0];
-                format!("-version \"{},{}.9\"", v, upper_bound)
+                format!(r#"-version "{},{}.9""#, v, upper_bound)
             },
             None => "-latest".to_string()
         };
