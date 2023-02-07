@@ -401,7 +401,7 @@ fn main() -> Result<()> {
 
     setup_msvcdev_cmd(&opt)?;
 
-    log::info!("Launching: {}\n\twith args: {}", opt.program.to_string_lossy(), opt.args.iter().map(|x| x.to_string_lossy()).collect::<Vec<_>>().join(" "));
+    log::info!("Launching: '{}' with args: {:?}", opt.program.to_string_lossy(), opt.args.iter().map(|x| x.to_string_lossy()).collect::<Vec<_>>());
 
     let cmd = Command::new(opt.program).args(opt.args).spawn().context("Unable to spawn program")?;
 
