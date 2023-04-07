@@ -250,14 +250,13 @@ impl Constants<'_> {
 
 
 fn is_path_variable(name: &str) -> bool {
-    let key = name.to_uppercase();
-    PATH_LIKE_VARIABLES.iter().any(|x| x.eq(&key))
+    PATH_LIKE_VARIABLES.iter().any(|x| x.eq_ignore_ascii_case(name))
 }
 
 /// Remove duplicates by keeping the first occurance and preserving order.
 /// This keeps path shadowing working as intended.
 fn filter_path_value(path: &str) -> String {
-    return path.split(";").into_iter().collect::<HashSet<_>>().into_iter().collect::<Vec<_>>().join(";")
+    path.split(";").into_iter().collect::<HashSet<_>>().into_iter().collect::<Vec<_>>().join(";")
 }
 
 fn setup_msvcdev_cmd(opt: &Opt) -> Result<()> {
@@ -366,7 +365,7 @@ fn setup_msvcdev_cmd(opt: &Opt) -> Result<()> {
     log::debug!("vcvars error: \n{}", cmd_error_string);
 
     // form feed
-    let cmd_output_parts = cmd_output_string.split(|num| num == &0xC).into_iter().map(|x| String::from_utf8_lossy(x)).collect::<Vec<_>>();
+    let cmd_output_parts = cmd_output_string.split(|num| num == &0xC).into_iter().map(|x| x.to_vec()).collect::<Vec<_>>();
 
     if cmd_output_parts.len() != 3 {
         bail!("Couldn't split the output into pages: {}", cmd_error_string);
@@ -375,9 +374,17 @@ fn setup_msvcdev_cmd(opt: &Opt) -> Result<()> {
     // AFTER this step, you can transform it into strings
     // (otherwise UTF-8 will munge the form feed char)
 
-    let old_environment = cmd_output_parts[0].split('\n');
-    let vcvars_output   = cmd_output_parts[1].split('\n');
-    let new_environment = cmd_output_parts[2].split('\n');
+    let cmd_output_utf8 = {
+        let mut tmp: Vec<String> = vec![];
+
+        for i in cmd_output_parts {
+            tmp.push(String::from_utf8(i)?);
+        }
+        tmp
+    };
+    let old_environment = cmd_output_utf8[0].trim().split('\n');
+    let vcvars_output   = cmd_output_utf8[1].trim().split('\n');
+    let new_environment = cmd_output_utf8[2].trim().split('\n');
 
     // If vsvars.bat is given an incorrect command line, it will print out
     // an error and *still* exit successfully. Parse out errors from output
@@ -401,7 +408,7 @@ fn setup_msvcdev_cmd(opt: &Opt) -> Result<()> {
             }
             match i.split_once('=') {
                 Some((name, old_value)) => {
-                    vars.insert(name, old_value);
+                    vars.insert(name.trim(), old_value.trim());
                 },
                 None => {
                     bail!("Invalid key=value in cmd output: {}", i);
@@ -422,10 +429,16 @@ fn setup_msvcdev_cmd(opt: &Opt) -> Result<()> {
             continue;
         }
         match i.split_once('=') {
-            Some((name, new_value)) => {
+            Some((n, nv)) => {
+                let name = n.trim();
+                let new_value = nv.trim();
                 let old_value = old_env_vars.get(name);
                 // For new variables "old_value === undefined".
-                if old_value.is_none() || !matches!(old_value, Some(v) if v.eq_ignore_ascii_case(new_value)) {
+                let is_new_variable = match old_value {
+                    Some(v) => !v.eq_ignore_ascii_case(new_value),
+                    None => true
+                };
+                if is_new_variable {
                     // Special case for a bunch of PATH-like variables: vcvarsall.bat
                     // just prepends its stuff without checking if its already there.
                     // This makes repeated invocations of this action fail after some
