@@ -89,9 +89,18 @@ impl Constants<'_> {
         })
     }
 
-    fn vsversion_to_versionnumber(&self, vsversion: &Option<String>) -> Option<&str> {
-        match vsversion  {
-            Some(v) => self.vs_year_version.get(v.as_str()).copied(),
+    fn vsversion_to_versionnumber(&self, vsversion: &Option<String>) -> Option<String> {
+        match vsversion {
+            Some(v) => {
+                if self.vs_year_version.values().any(|i| i == v) {
+                    Some(v.clone())
+                }  else {
+                    return match self.vs_year_version.get(v.as_str()) {
+                        Some(v) => Some(v.to_string()),
+                        None => Some(v.clone())
+                    }
+                }
+            }
             None => None
         }
     }
@@ -112,7 +121,9 @@ impl Constants<'_> {
             args.push("-products");
             args.push("*");
             args.push(version_pattern);
-            args.push("-prerelease");
+            if version_pattern.contains(','){
+                args.push("-prerelease");
+            }
             args.push("-property");
             args.push("installationPath");
             args.push("-sort");
@@ -169,10 +180,19 @@ impl Constants<'_> {
 
     fn find_vcvarsall(&self, vsversion: &Option<String>) -> Result<PathBuf> {
         let vsversion_number = self.vsversion_to_versionnumber(vsversion);
+        log::debug!("Version number: {:?}", vsversion_number);
         let version_pattern = match vsversion_number {
             Some(v) => {
-                let upper_bound = v.split(".").collect::<Vec<_>>()[0];
-                format!(r#"-version "{},{}.9""#, v, upper_bound)
+                let is_version_number = match vsversion {
+                    Some(v) => v.contains('.'),
+                    None => false
+                };
+                if is_version_number {
+                    format!(r#"-version "{}""#, v)
+                } else {
+                    let upper_bound = v.split(".").collect::<Vec<_>>()[0];
+                    format!(r#"-version "{},{}.9""#, v, upper_bound)
+                }
             },
             None => "-latest".to_string()
         };
@@ -340,7 +360,7 @@ fn setup_msvcdev_cmd(opt: &Opt) -> Result<()> {
 
     let result = command.output()?;
     let cmd_output_string = result.stdout;
-    log::debug!("vcvars output: \n{}", String::from_utf8_lossy(&cmd_output_string));
+    // log::debug!("vcvars output: \n{}", String::from_utf8_lossy(&cmd_output_string));
 
     let cmd_error_string = String::from_utf8_lossy(&result.stderr);
     log::debug!("vcvars error: \n{}", cmd_error_string);
